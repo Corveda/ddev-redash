@@ -80,9 +80,7 @@ ddev exec -s redash-server ./manage.py users create \
 ```
 
 
-Then log in at:
-
-https://redash.<project>.ddev.site
+Then log in at: `https://redash.<project>.ddev.site`
 
 Environment and secrets
 
