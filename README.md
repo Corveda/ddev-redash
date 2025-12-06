@@ -29,9 +29,7 @@ Redash integration for DDEV.
 
 ## URL
 
-Redash will be available at:
-
-https://redash.<project>.ddev.site
+Redash will be available at: `https://redash.<project>.ddev.site`
 
 
 You can also see this via:
