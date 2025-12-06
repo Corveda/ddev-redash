@@ -7,42 +7,141 @@
 
 ## Overview
 
-This add-on integrates Redash into your [DDEV](https://ddev.com/) project.
+Redash integration for DDEV.
 
-## Installation
+- Runs Redash server + scheduler + workers
+- Uses Postgres 17 (pgautoupgrade) dedicated for Redash
+- Reuses the [ddev-redis](https://github.com/ddev/ddev-redis) add-on
+- Exposes UI at **https://redash.\<project\>.ddev.site** (no port)
 
-```bash
-ddev add-on get Corveda/ddev-redash
-ddev restart
+## Requirements
+
+- DDEV v1.24.0 or newer
+- Docker
+- Project already set up with DDEV
+
+  ```bash
+  ddev get ddev/ddev-redis
+  ddev restart
+  ```
+
+  After restart, DDEV will merge docker-compose.redash.yaml into your project.
+
+## URL
+
+Redash will be available at:
+
+https://redash.<project>.ddev.site
+
+
+You can also see this via:
+
+`ddev describe`
+
+
+Look for "Redash UI" in the output.
+
+## Database initialization
+
+On a new project, you must initialize the Redash database schema once
+and keep it up to date.
+
+One-time initialization
+# Run migrations (creates schema on an empty DB)
+ddev exec -s redash-server ./manage.py db upgrade
+
+
+If you see errors about missing tables (e.g. "relation 'queries' does not exist"),
+make sure you've run this on a fresh Redash DB (the default is redash
+inside redash-postgres).
+
+Optional: auto-run migrations on startup
+
+You can add this hook to .ddev/config.yaml in your project so Redash
+migrations run automatically every time the project starts:
+```yaml
+hooks:
+  post-start:
+    - exec: ./manage.py db upgrade || echo 'Redash migration failed (ignored on startup)'
+      service: redash-server
 ```
 
-After installation, make sure to commit the `.ddev` directory to version control.
+This keeps the Redash DB schema up to date with the image.
 
-## Usage
+Create an admin user
 
-| Command | Description |
-| ------- | ----------- |
-| `ddev describe` | View service status and used ports for Redash |
-| `ddev logs -s redash` | Check Redash logs |
+After migrations succeed, create the first admin user (if Redash doesn't
+show you the web-based "Initial Setup" screen):
 
-## Advanced Customization
-
-To change the Docker image:
-
-```bash
-ddev dotenv set .ddev/.env.redash --redash-docker-image="ddev/ddev-utilities:latest"
-ddev add-on get Corveda/ddev-redash
-ddev restart
+```
+ddev exec -s redash-server ./manage.py users create \
+  --admin \
+  --password admin \
+  --email admin@example.com \
+  --name "Admin"
 ```
 
-Make sure to commit the `.ddev/.env.redash` file to version control.
 
-All customization options (use with caution):
+Then log in at:
 
-| Variable | Flag | Default |
-| -------- | ---- | ------- |
-| `REDASH_DOCKER_IMAGE` | `--redash-docker-image` | `ddev/ddev-utilities:latest` |
+https://redash.<project>.ddev.site
 
-## Credits
+Environment and secrets
 
-**Contributed and maintained by [@Corveda](https://github.com/Corveda)**
+The add-on embeds default environment values in docker-compose.redash.yaml:
+
+```
+REDASH_REDIS_URL: "redis://redis:6379/5"
+REDASH_DATABASE_URL: "postgresql://redash:redash@redash-postgres/redash"
+REDASH_COOKIE_SECRET: "changeme-redash-cookie-secret"
+REDASH_SECRET_KEY: "changeme-redash-secret-key"
+```
+
+For any non-throwaway setup, you should:
+
+Change `REDASH_COOKIE_SECRET` and `REDASH_SECRET_KEY` to long random strings.
+
+Optionally change the Postgres credentials (`POSTGRES_USER`, `POSTGRES_PASSWORD`, `POSTGRES_DB`)
+and keep `REDASH_DATABASE_URL` in sync.
+
+## Services
+
+This add-on defines these services:
+
+redash-server – Redash web UI / API, fronted by DDEV router
+
+redash-scheduler – schedules periodic queries
+
+redash-scheduled-worker – runs scheduled queries
+
+redash-adhoc-worker – runs ad-hoc queries
+
+redash-worker – handles periodic, emails, default queues
+
+redash-postgres – dedicated Postgres for Redash
+
+redis – expected from ddev/ddev-redis add-on
+
+All of them are wired into DDEV via labels, so you can use:
+
+```
+ddev logs -s redash-server
+ddev logs -s redash-worker
+ddev exec -s redash-scheduler env
+```
+
+## Uninstall
+
+From your project:
+
+`ddev delete -Oy   # if you want to remove containers and data`
+# or just:
+# ddev delete
+
+
+Then remove the add-on from your project config:
+
+`ddev get --remove corveda/ddev-redash`
+
+
+Or manually delete docker-compose.redash.yaml under .ddev/.
