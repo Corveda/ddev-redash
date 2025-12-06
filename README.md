@@ -135,8 +135,8 @@ ddev exec -s redash-scheduler env
 From your project:
 
 `ddev delete -Oy   # if you want to remove containers and data`
-# or just:
-# ddev delete
+or just:
+`ddev delete`
 
 
 Then remove the add-on from your project config:
