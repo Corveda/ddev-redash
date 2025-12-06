@@ -12,7 +12,7 @@ Redash integration for DDEV.
 - Runs Redash server + scheduler + workers
 - Uses Postgres 17 (pgautoupgrade) dedicated for Redash
 - Reuses the [ddev-redis](https://github.com/ddev/ddev-redis) add-on
-- Exposes UI at **https://redash.\<project\>.ddev.site** (no port)
+- Exposes UI at **https://redash.<project>.ddev.site** (no port)
 
 ## Requirements
 
