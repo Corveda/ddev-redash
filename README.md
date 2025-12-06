@@ -46,7 +46,7 @@ and keep it up to date.
 
 One-time initialization
 # Run migrations (creates schema on an empty DB)
-ddev exec -s redash-server ./manage.py db upgrade
+`ddev exec -s redash-server ./manage.py db upgrade`
 
 
 If you see errors about missing tables (e.g. "relation 'queries' does not exist"),
