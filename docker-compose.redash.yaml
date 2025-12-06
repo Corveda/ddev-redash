@@ -1,15 +1,116 @@
-#ddev-generated
-services:
-  redash:
-    container_name: ddev-${DDEV_SITENAME}-redash
-    image: ${REDASH_DOCKER_IMAGE:-ddev/ddev-utilities:latest}
-    command: tail -f /dev/null
-    restart: "no"
-    # These labels ensure this service is discoverable by DDEV.
-    labels:
-      com.ddev.site-name: ${DDEV_SITENAME}
-      com.ddev.approot: ${DDEV_APPROOT}
+# Shared environment for all Redash services
+x-redash-env: &redash-env
+  PYTHONUNBUFFERED: 0
+  REDASH_LOG_LEVEL: INFO
+  REDASH_MULTI_ORG: "false"
 
+  # Redis from ddev-redis plugin
+  REDASH_REDIS_URL: "redis://redash-redis:6379/5"
+
+  # Postgres inside this compose
+  REDASH_DATABASE_URL: "postgresql://postgres:redash@redash-postgres/postgres"
+
+  # REQUIRED SECRETS (generate real random strings)
+  REDASH_COOKIE_SECRET: "super-long-random-cookie-secret"
+  REDASH_SECRET_KEY: "super-long-random-secret-key"
+
+# Shared base service setup
+x-redash-service: &redash-service
+  image: redash/redash:25.8.0
+  depends_on:
+    - redash-postgres
+    - redash-redis
+  restart: always
+  labels:
+    com.ddev.site-name: "${DDEV_SITENAME}"
+    com.ddev.approot: "${DDEV_APPROOT}"
+
+services:
+  redash-server:
+    <<: *redash-service
+    container_name: "ddev-${DDEV_SITENAME}-redash-server"
+    command: server
+
+    expose:
+      - "5000"
+
+    environment:
+      <<: *redash-env
+      REDASH_WEB_WORKERS: 4
+      VIRTUAL_HOST: "reports.${DDEV_SITENAME}.ddev.site"
+      HTTP_EXPOSE: "80:5000"
+      HTTPS_EXPOSE: "443:5000"
+
+    x-ddev:
+      describe-url: "https://reports.${DDEV_SITENAME}.ddev.site"
+      describe-info: "Redash UI"
+
+  redash-scheduler:
+    <<: *redash-service
+    container_name: "ddev-${DDEV_SITENAME}-redash-scheduler"
+    command: scheduler
+    depends_on:
+      - redash-server
+    environment:
+      <<: *redash-env
+
+  redash-scheduled-worker:
+    <<: *redash-service
+    container_name: "ddev-${DDEV_SITENAME}-redash-scheduled-worker"
+    command: worker
+    depends_on:
+      - redash-server
+    environment:
+      <<: *redash-env
+      QUEUES: "scheduled_queries,schemas"
+      WORKERS_COUNT: 1
+
+  redash-adhoc-worker:
+    <<: *redash-service
+    container_name: "ddev-${DDEV_SITENAME}-redash-adhoc-worker"
+    command: worker
+    depends_on:
+      - redash-server
+    environment:
+      <<: *redash-env
+      QUEUES: "queries"
+      WORKERS_COUNT: 2
+
+  redash-worker:
+    <<: *redash-service
+    container_name: "ddev-${DDEV_SITENAME}-redash-worker"
+    command: worker
+    environment:
+      <<: *redash-env
+      QUEUES: "periodic,emails,default"
+      WORKERS_COUNT: 1
+
+  # Postgres for Redash
+  redash-postgres:
+    image: pgautoupgrade/pgautoupgrade:17-alpine
+    container_name: "ddev-${DDEV_SITENAME}-redash-postgres"
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: "postgres"
+      POSTGRES_USER: "postgres"
+      POSTGRES_PASSWORD: "redash"
     volumes:
-      - ".:/mnt/ddev_config"
-      - "ddev-global-cache:/mnt/ddev-global-cache"
+      - redash-pg-data:/var/lib/postgresql/data
+    labels:
+      com.ddev.site-name: "${DDEV_SITENAME}"
+      com.ddev.approot: "${DDEV_APPROOT}"
+
+  redash-redis:
+    image: redis:7-alpine
+    container_name: "ddev-${DDEV_SITENAME}-redash-redis"
+    restart: unless-stopped
+    volumes:
+      - redash-redis-data:/data
+    labels:
+      com.ddev.site-name: "${DDEV_SITENAME}"
+      com.ddev.approot: "${DDEV_APPROOT}"
+
+volumes:
+  redash-pg-data:
+  redash-redis-data:
+
